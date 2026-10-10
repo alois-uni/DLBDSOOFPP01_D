@@ -307,7 +307,7 @@ class Portfolio(Pruefungsleistung):
                  abgegebene_phasen: int = 0, **zustand) -> None:
         super().__init__(**zustand)
         fristen = sorted(phasenfristen)
-        if abgegebene_phasen < 0 or (fristen and abgegebene_phasen > len(fristen)):
+        if not 0 <= abgegebene_phasen <= len(fristen):
             raise ValueError(f"{abgegebene_phasen} abgegebene Phasen passen nicht "
                              f"zu {len(fristen)} Fristen")
         self._phasenfristen = fristen
@@ -322,15 +322,20 @@ class Portfolio(Pruefungsleistung):
         return self._abgegebene_phasen
 
     def phase_abgeben(self) -> None:
-        """Gibt die nächste Phase ab; nach der letzten Phase ist das Portfolio abgegeben."""
+        """Gibt die nächste Phase ab; nach der letzten Phase ist das Portfolio abgegeben.
+
+        Abgeben lässt sich nur eine Phase, deren Frist eingetragen ist. Sonst
+        stünden mehr abgegebene Phasen als Fristen im Portfolio, und eine
+        später eingetragene Frist landete bei einer schon abgegebenen Phase.
+        """
         if self._status is not Pruefungsstatus.ANGEMELDET:
             raise ValueError("Eine Phase lässt sich nur abgeben, wenn das "
                              f"Portfolio angemeldet ist (Status: {self._status.anzeige})")
-        anzahl = len(self._phasenfristen)
-        if anzahl and self._abgegebene_phasen >= anzahl:
-            raise ValueError("Alle Phasen sind bereits abgegeben")
-        self._abgegebene_phasen += 1
-        if anzahl and self._abgegebene_phasen == anzahl:
+        naechste = self._abgegebene_phasen + 1
+        if naechste > len(self._phasenfristen):
+            raise ValueError(f"Erst die Frist der Phase {naechste} eintragen")
+        self._abgegebene_phasen = naechste
+        if naechste == len(self._phasenfristen):
             self._status = Pruefungsstatus.ABGEGEBEN
 
     def naechster_termin(self) -> date | None:

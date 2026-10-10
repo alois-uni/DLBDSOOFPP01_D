@@ -102,8 +102,7 @@ def invarianten_pruefen(sg: Studiengang, controller: DashboardController) -> Non
             assert pl.naechster_termin() is None, f"{modul.kuerzel}: Termin trotz Abschluss"
         if isinstance(pl, Portfolio):
             assert list(pl.phasenfristen) == sorted(pl.phasenfristen), modul.kuerzel
-            if pl.phasenfristen:
-                assert pl.abgegebene_phasen <= len(pl.phasenfristen), modul.kuerzel
+            assert pl.abgegebene_phasen <= len(pl.phasenfristen), modul.kuerzel
 
     # Plausibilitätsregeln aus Phase 3 (Gesamtzustand über mehrere Eingaben)
     for modul in sg.module:

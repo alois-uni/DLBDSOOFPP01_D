@@ -166,6 +166,18 @@ class PruefungsleistungTest(unittest.TestCase):
         self.assertEqual(portfolio.phasenfristen, ())
         self.assertIsNone(portfolio.naechster_termin())
 
+    def test_phase_abgeben_braucht_bekannte_frist(self):
+        portfolio = Portfolio(status=Pruefungsstatus.ANGEMELDET)
+        with self.assertRaises(ValueError):
+            portfolio.phase_abgeben()                    # Frist von Phase 1 fehlt
+        self.assertEqual(portfolio.abgegebene_phasen, 0)
+        portfolio.termin_setzen(date(2026, 11, 1))       # Frist Phase 1
+        portfolio.phase_abgeben()
+        self.assertEqual(portfolio.terminart(), "Phasenfrist")
+        self.assertIs(portfolio.status, Pruefungsstatus.ABGEGEBEN)
+        with self.assertRaises(ValueError):
+            Portfolio([], 2)                             # gespeicherter Widerspruch
+
     def test_portfolio_ohne_fristen_bekommt_keine_note(self):
         portfolio = Portfolio()
         with self.assertRaises(ValueError):
