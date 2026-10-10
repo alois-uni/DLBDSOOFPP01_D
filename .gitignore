@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+daten/studium.db
+testprogramme/phase1/machbarkeit_test.db
+.DS_Store
