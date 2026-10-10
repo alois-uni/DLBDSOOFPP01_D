@@ -167,7 +167,13 @@ class ErfassungsDialog:
         self._phase.state(["!disabled"] if modul.ist_portfolio else ["disabled"])
         self._entfernen_knopf.state(["!disabled"] if modul.note is not None else ["disabled"])
         self._semester.current(modul.semester or 0)
-        self._status.set(modul.status.anzeige if modul.status in self._status_werte else "")
+        # Bestanden und nicht bestanden stehen im Feld, lassen sich aber nicht
+        # auswählen. Nach bestanden ist keine Statusänderung mehr möglich, nach
+        # nicht bestanden nur die Anmeldung zum nächsten Versuch.
+        self._status.set(modul.status.anzeige)
+        bestanden = modul.status is Pruefungsstatus.BESTANDEN
+        for element in (self._status, self._status_knopf):
+            element.state(["disabled"] if bestanden else ["!disabled"])
 
     # ------------------------------------------------------------ Aktionen
     def _speichern(self, aktion: Callable[[ModulDTO], None], erfolg: str) -> None:

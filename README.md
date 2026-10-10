@@ -13,7 +13,8 @@ Prototyp eines Dashboards, das den eigenen Studienfortschritt überwacht: Abschl
 ## Voraussetzungen
 
 - Python 3.10 oder neuer mit Tcl/Tk (unter Windows im Installer von python.org enthalten)
-- keine weiteren Pakete, keine Administratorrechte, keine Internetverbindung
+- nur die Standardbibliothek: keine weiteren Pakete, daher weder virtuelle Umgebung noch `requirements.txt`
+- keine Administratorrechte, keine Internetverbindung
 
 ## Starten
 

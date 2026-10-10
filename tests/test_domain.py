@@ -166,6 +166,13 @@ class PruefungsleistungTest(unittest.TestCase):
         self.assertEqual(portfolio.phasenfristen, ())
         self.assertIsNone(portfolio.naechster_termin())
 
+    def test_portfolio_ohne_fristen_bekommt_keine_note(self):
+        portfolio = Portfolio()
+        with self.assertRaises(ValueError):
+            portfolio.note_eintragen(Decimal("1.0"), date(2026, 10, 1))
+        self.assertIs(portfolio.status, Pruefungsstatus.GEPLANT)
+        self.assertIsNone(portfolio.note)
+
 
 class StudiengangTest(unittest.TestCase):
     def setUp(self):

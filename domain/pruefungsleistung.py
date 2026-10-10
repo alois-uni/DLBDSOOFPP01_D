@@ -345,8 +345,14 @@ class Portfolio(Pruefungsleistung):
         return f"Phase {self._abgegebene_phasen + 1} abgeben"
 
     def note_eintragen(self, note: Decimal, datum: date) -> None:
-        """Eine Note gibt es erst, wenn alle bekannten Phasen abgegeben sind."""
-        if self._phasenfristen and self._abgegebene_phasen < len(self._phasenfristen):
+        """Eine Note gibt es erst, wenn alle Phasen abgegeben sind.
+
+        Ohne Phasenfristen ist die Zahl der Phasen unbekannt; dann lehnt die
+        Methode ab, statt ein Portfolio mit 0 abgegebenen Phasen zu benoten.
+        """
+        if not self._phasenfristen:
+            raise ValueError("Erst die Phasenfristen eintragen und alle Phasen abgeben")
+        if self._abgegebene_phasen < len(self._phasenfristen):
             raise ValueError(f"Erst {self._abgegebene_phasen} von "
                              f"{len(self._phasenfristen)} Phasen sind abgegeben")
         super().note_eintragen(note, datum)

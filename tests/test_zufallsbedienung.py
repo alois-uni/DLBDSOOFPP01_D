@@ -114,7 +114,8 @@ def invarianten_pruefen(sg: Studiengang, controller: DashboardController) -> Non
         for termin in (getattr(pl, "pruefungstermin", None), getattr(pl, "abgabefrist", None),
                        *getattr(pl, "phasenfristen", ())):
             assert termin is None or termin >= sg.startdatum, f"{modul.kuerzel}: Termin"
-        if isinstance(pl, Portfolio) and pl.note is not None and pl.phasenfristen:
+        if isinstance(pl, Portfolio) and pl.note is not None:
+            assert pl.phasenfristen, f"{modul.kuerzel}: Note ohne Phasenfristen"
             assert pl.abgegebene_phasen == len(pl.phasenfristen), f"{modul.kuerzel}: Phasen"
 
     bestanden = sum(m.ects for m in sg.module if m.ist_bestanden())
