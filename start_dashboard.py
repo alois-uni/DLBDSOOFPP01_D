@@ -18,7 +18,8 @@ from pathlib import Path
 
 OHNE_TK = ("Dem installierten Python fehlt tkinter (Tcl/Tk), das zur Standardbibliothek "
            "gehört. Unter Windows Python von python.org installieren und die Option "
-           "„tcl/tk and IDLE“ angehakt lassen; mit Homebrew: brew install python-tk.")
+           "„tcl/tk and IDLE“ angehakt lassen; mit Homebrew passend zur Python-Version, "
+           "z. B. brew install python-tk@3.14.")
 
 
 def _abbrechen(text: str) -> None:
@@ -38,6 +39,9 @@ except ImportError:
 PROGRAMMORDNER = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROGRAMMORDNER))      # Pakete auch beim Doppelklick finden
 
+# Die eigenen Pakete werden erst nach der tkinter-Prüfung und dem Pfad
+# importiert. "noqa: E402" sagt Prüfwerkzeugen wie flake8, dass die späten
+# Importe gewollt sind.
 from controller import DashboardController            # noqa: E402
 from repository import SqliteStudiengangRepository    # noqa: E402
 from service import ErfassungsService, KennzahlenService  # noqa: E402
@@ -47,6 +51,12 @@ MINDESTVERSION = (3, 10)
 
 
 class DashboardApp:
+    """Erzeugt alle Objekte und verbindet sie (Composition Root).
+
+    Repository, Services und Controller entstehen nur hier; die übrigen
+    Klassen bekommen sie über ihren Konstruktor.
+    """
+
     def __init__(self, stichtag: date, datenordner: Path) -> None:
         self._stichtag = stichtag
         self._datenordner = datenordner
@@ -63,6 +73,7 @@ class DashboardApp:
         return arbeitskopie
 
     def start(self) -> None:
+        """Baut die Objekte auf und öffnet das Fenster; kehrt erst beim Schließen zurück."""
         repository = SqliteStudiengangRepository(self._datenbank_bereitstellen())
         controller = DashboardController(repository, KennzahlenService(),
                                          ErfassungsService(), self._stichtag)
@@ -72,6 +83,7 @@ class DashboardApp:
 
 
 def _stichtag(text: str) -> date:
+    """Wandelt --stichtag in ein Datum; argparse meldet Fehler mit Hinweis auf das Format."""
     try:
         return date.fromisoformat(text)
     except ValueError:
@@ -79,6 +91,7 @@ def _stichtag(text: str) -> date:
 
 
 def main(argumente: list[str] | None = None) -> None:
+    """Einstieg für die Eingabeaufforderung und für start_dashboard.pyw."""
     if sys.version_info < MINDESTVERSION:
         _abbrechen("Das Studien-Dashboard braucht Python 3.10 oder neuer.")
     parser = argparse.ArgumentParser(description="Studien-Dashboard (Prototyp)")

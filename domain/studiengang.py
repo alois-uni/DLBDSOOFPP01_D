@@ -32,6 +32,14 @@ def _plus_monate(tag: date, monate: int) -> date:
 
 
 class Studiengang:
+    """Der Studiengang mit Semestern, Modulkatalog und Studienzielen.
+
+    Er erzeugt seine Teile selbst (neues_semester, neues_modul) und berechnet
+    die Kennzahlen, die nur ihn betreffen: bestandene ECTS,
+    Notendurchschnitt und Sollwert. Kennzahlen über mehrere Module und Termine
+    hinweg liegen im KennzahlenService.
+    """
+
     def __init__(self, bezeichnung: str, abschluss: Abschlussgrad, startdatum: date,
                  gesamt_ects: int = 180) -> None:
         if gesamt_ects <= 0:
@@ -53,6 +61,7 @@ class Studiengang:
 
     def neues_semester(self, beginn: date | None = None,
                        ende: date | None = None) -> Semester:
+        """Hängt das nächste Semester an; ohne Angaben gilt der Sechsmonatstakt."""
         nummer = len(self._semester) + 1
         beginn = beginn or self.semesterbeginn(nummer)
         ende = ende or self.semesterbeginn(nummer + 1) - timedelta(days=1)
@@ -62,6 +71,7 @@ class Studiengang:
 
     def neues_modul(self, kuerzel: str, bezeichnung: str, ects: int,
                     pruefungsleistung: Pruefungsleistung) -> Modul:
+        """Nimmt ein Modul in den Katalog auf; das Kürzel muss eindeutig sein."""
         if self.modul(kuerzel) is not None:
             raise ValueError(f"Das Kürzel {kuerzel} ist bereits vergeben")
         modul = Modul(kuerzel, bezeichnung, ects, pruefungsleistung)
@@ -102,16 +112,22 @@ class Studiengang:
         return tuple(self._ziele)
 
     def modul(self, kuerzel: str) -> Modul | None:
+        """Modul aus dem Katalog, None bei unbekanntem Kürzel."""
         return next((m for m in self._module if m.kuerzel == kuerzel), None)
 
     def semester(self, nummer: int) -> Semester | None:
+        """Semester mit dieser Nummer, None wenn es nicht existiert."""
         return next((s for s in self._semester if s.nummer == nummer), None)
 
     def semester_von(self, modul: Modul) -> Semester | None:
         """Semester, dem das Modul zugeordnet ist, oder None."""
-        return next((s for s in self._semester if any(m is modul for m in s.module)), None)
+        return next((s for s in self._semester if s.hat_modul(modul)), None)
 
     def aktuelles_semester(self, stichtag: date) -> Semester | None:
+        """Semester, in dessen Zeitraum der Stichtag fällt.
+
+        None vor dem Studienbeginn und nach der Regelstudienzeit.
+        """
         return next((s for s in self._semester if s.enthaelt(stichtag)), None)
 
     # ------------------------------------------------------------ Kennzahlen
@@ -120,6 +136,7 @@ class Studiengang:
         return len(self._semester)
 
     def bestandene_ects(self) -> int:
+        """ECTS aller bestandenen Module des Katalogs."""
         return sum(m.ects for m in self._module if m.ist_bestanden())
 
     def notendurchschnitt(self) -> Decimal | None:

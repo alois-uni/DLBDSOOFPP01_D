@@ -41,10 +41,18 @@ class ModulDTO:
     phasen: str = ""                     # z. B. "2 von 3 Phasen abgegeben"
     bewertet_am: date | None = None      # für Korrekturen im Dialog
     terminart: str = ""                  # z. B. "Prüfungstermin", "Frist Phase 3"
+    versuch: int = 1                     # laufender Prüfungsversuch
+    max_versuche: int = 3
 
 
 @dataclass(frozen=True)
 class DashboardDTO:
+    """Alles, was die Oberfläche für einen Neuaufbau des Dashboards braucht.
+
+    Die Werte sind fertig berechnet; die Oberfläche rechnet nur noch
+    Pixelpositionen aus.
+    """
+
     kopfzeile: str
     stichtag: date
     ziele: tuple[ZielDTO, ...]

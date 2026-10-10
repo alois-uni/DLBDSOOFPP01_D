@@ -45,6 +45,7 @@ STUDIENBEGINN = date(2026, 8, 10)
 GESAMT_ECTS = 180
 REGELSTUDIENZEIT = 6
 
+# Spalte pruefungsform -> Konstruktor der passenden Unterklasse
 FORMEN = {
     "klausur": lambda termine, zustand: Klausur(termine[0] if termine else None, **zustand),
     "advanced_workbook": lambda termine, zustand: AdvancedWorkbook(
@@ -57,15 +58,22 @@ FORMEN = {
 
 
 def _lies(datei: Path) -> list[dict[str, str]]:
+    """Liest eine CSV-Datei mit Semikolon; utf-8-sig verträgt auch Dateien aus Excel."""
     with datei.open(encoding="utf-8-sig", newline="") as f:
         return list(csv.DictReader(f, delimiter=";"))
 
 
 def _datum(text: str) -> date | None:
+    """ISO-Datum aus der CSV-Datei; leeres Feld wird None."""
     return date.fromisoformat(text) if text.strip() else None
 
 
 def erzeuge_studiengang(module_csv: Path, stand_csv: Path) -> Studiengang:
+    """Baut den Studiengang mit Semestern, Zielen und allen Modulen aus den CSV-Dateien.
+
+    Toleranz der Ziele: Ein Modul Rückstand bzw. ein Durchschnitt bis 0,1
+    über der Zielnote gelten noch als gelb.
+    """
     sg = Studiengang(STUDIENGANG, ABSCHLUSS, STUDIENBEGINN, GESAMT_ECTS)
     for _ in range(REGELSTUDIENZEIT):
         sg.neues_semester()
@@ -108,6 +116,7 @@ def erzeuge_studiengang(module_csv: Path, stand_csv: Path) -> Studiengang:
 
 
 def main() -> None:
+    """Schreibt daten/beispiel.db neu; eine vorhandene Datei wird ersetzt."""
     sg = erzeuge_studiengang(DATEN / "module.csv", DATEN / "stand.csv")
     ziel = DATEN / "beispiel.db"
     SqliteStudiengangRepository(ziel).speichere(sg)

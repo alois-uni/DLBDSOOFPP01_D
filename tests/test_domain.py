@@ -31,6 +31,19 @@ class PruefungsleistungTest(unittest.TestCase):
         self.assertEqual(Klausur(date(2027, 1, 30), zieltermin=geplant).naechster_termin(),
                          date(2027, 1, 30))
 
+    def test_selbst_geplant_nur_ohne_gebuchten_termin(self):
+        geplant = date(2027, 2, 5)
+        self.assertTrue(Klausur(None, zieltermin=geplant).ist_selbst_geplant())
+        # gebuchter Termin am selben Tag wie der Zieltermin
+        self.assertFalse(Klausur(geplant, zieltermin=geplant).ist_selbst_geplant())
+        self.assertFalse(Klausur(None).ist_selbst_geplant())
+        portfolio = Portfolio([geplant], 0, zieltermin=geplant,
+                              status=Pruefungsstatus.ANGEMELDET)
+        self.assertFalse(portfolio.ist_selbst_geplant())
+        abgegeben = AdvancedWorkbook(None, zieltermin=geplant,
+                                     status=Pruefungsstatus.ABGEGEBEN)
+        self.assertFalse(abgegeben.ist_selbst_geplant())
+
     def test_abgegebene_leistung_hat_keinen_naechsten_termin(self):
         workbook = AdvancedWorkbook(date(2026, 8, 30), status=Pruefungsstatus.ABGEGEBEN)
         self.assertIsNone(workbook.naechster_termin())
@@ -132,6 +145,21 @@ class PruefungsleistungTest(unittest.TestCase):
         self.assertIsNone(portfolio.naechster_termin())
         with self.assertRaises(ValueError):
             portfolio.phase_abgeben()
+
+    def test_terminart_nach_letzter_phase(self):
+        portfolio = Portfolio([date(2026, 9, 15)], 0, status=Pruefungsstatus.ANGEMELDET)
+        self.assertEqual(portfolio.terminart(), "Frist Phase 1")
+        portfolio.phase_abgeben()
+        self.assertEqual(portfolio.terminart(), "Phasenfrist")   # nicht "Frist Phase 2"
+
+    def test_portfolio_note_erst_nach_letzter_phase(self):
+        portfolio = Portfolio([date(2026, 9, 15), date(2026, 9, 30)], 1,
+                              status=Pruefungsstatus.ANGEMELDET)
+        with self.assertRaises(ValueError):
+            portfolio.note_eintragen(Decimal("1.0"), date(2026, 10, 1))
+        portfolio.phase_abgeben()
+        portfolio.note_eintragen(Decimal("1.0"), date(2026, 10, 1))
+        self.assertIs(portfolio.status, Pruefungsstatus.BESTANDEN)
 
     def test_portfolio_ohne_fristen_ist_erlaubt(self):
         portfolio = Portfolio()                              # Multiplizität [0..*]

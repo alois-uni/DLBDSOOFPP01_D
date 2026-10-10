@@ -11,6 +11,8 @@ from enum import Enum
 
 
 class Abschlussgrad(Enum):
+    """Akademischer Grad, mit dem der Studiengang abschließt."""
+
     BACHELOR_OF_SCIENCE = "bachelorOfScience"
     BACHELOR_OF_ARTS = "bachelorOfArts"
     MASTER_OF_SCIENCE = "masterOfScience"
@@ -28,6 +30,13 @@ class Abschlussgrad(Enum):
 
 
 class Pruefungsstatus(Enum):
+    """Stand einer Prüfungsleistung.
+
+    Die ersten drei Werte setzt der Nutzer selbst (SETZBARE_STATUS in
+    pruefungsleistung.py); bestanden und nicht bestanden ergeben sich nur aus
+    der eingetragenen Note.
+    """
+
     GEPLANT = "geplant"
     ANGEMELDET = "angemeldet"
     ABGEGEBEN = "abgegeben"
@@ -41,6 +50,8 @@ class Pruefungsstatus(Enum):
 
 
 class Ampel(Enum):
+    """Bewertung eines Studienziels in Bereich A des Dashboards."""
+
     GRUEN = "gruen"
     GELB = "gelb"
     ROT = "rot"

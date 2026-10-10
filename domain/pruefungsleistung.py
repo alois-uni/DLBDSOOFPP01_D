@@ -115,6 +115,16 @@ class Pruefungsleistung(ABC):
         """Was zum nächsten Termin zu tun ist (Text für Bereich G)."""
         return "abgeben"
 
+    def ist_selbst_geplant(self) -> bool:
+        """Ist der nächste Termin nur der Zieltermin, weil noch nichts gebucht ist?
+
+        Bereich G weist dann darauf hin, dass der Termin noch zu buchen ist.
+        Ein Vergleich der Daten genügt nicht: Ein gebuchter Termin kann auf
+        denselben Tag fallen wie der Zieltermin.
+        """
+        return (self.ist_offen() and self._zieltermin is not None
+                and self._gebuchter_termin() is None)
+
     # ------------------------------------------------------------ ändern
     def status_setzen(self, status: Pruefungsstatus) -> None:
         """Setzt geplant, angemeldet oder abgegeben.
@@ -163,6 +173,10 @@ class Pruefungsleistung(ABC):
         """Jede Prüfungsform weiß, welches Attribut ihr Termin ist."""
 
     @abstractmethod
+    def _gebuchter_termin(self) -> date | None:
+        """Gegenstück zu _termin_eintragen: der gebuchte Termin bzw. die Frist, sonst None."""
+
+    @abstractmethod
     def terminart(self) -> str:
         """Bezeichnung des Termins, den termin_setzen() setzt (für den Dialog)."""
 
@@ -191,6 +205,11 @@ class Pruefungsleistung(ABC):
 
 
 class Klausur(Pruefungsleistung):
+    """Klausur; der nächste Termin ist der gebuchte Prüfungstermin.
+
+    Ohne Buchung zeigt das Dashboard den selbst geplanten Zieltermin.
+    """
+
     FORM = "Klausur"
 
     def __init__(self, pruefungstermin: date | None = None, **zustand) -> None:
@@ -210,11 +229,16 @@ class Klausur(Pruefungsleistung):
     def _termin_eintragen(self, datum: date) -> None:
         self._pruefungstermin = datum
 
+    def _gebuchter_termin(self) -> date | None:
+        return self._pruefungstermin
+
     def terminart(self) -> str:
         return "Prüfungstermin"
 
 
 class AdvancedWorkbook(Pruefungsleistung):
+    """Advanced Workbook mit einer einzigen Abgabefrist."""
+
     FORM = "Advanced Workbook"
 
     def __init__(self, abgabefrist: date | None = None, **zustand) -> None:
@@ -230,6 +254,9 @@ class AdvancedWorkbook(Pruefungsleistung):
 
     def _termin_eintragen(self, datum: date) -> None:
         self._abgabefrist = datum
+
+    def _gebuchter_termin(self) -> date | None:
+        return self._abgabefrist
 
     def terminart(self) -> str:
         return "Abgabefrist"
@@ -258,6 +285,9 @@ class SchriftlicheArbeit(Pruefungsleistung):
 
     def _termin_eintragen(self, datum: date) -> None:
         self._abgabefrist = datum
+
+    def _gebuchter_termin(self) -> date | None:
+        return self._abgabefrist
 
     def terminart(self) -> str:
         return "Abgabefrist"
@@ -304,11 +334,22 @@ class Portfolio(Pruefungsleistung):
             self._status = Pruefungsstatus.ABGEGEBEN
 
     def naechster_termin(self) -> date | None:
+        return self._termin_oder_ziel(self._gebuchter_termin())
+
+    def _gebuchter_termin(self) -> date | None:
+        """Frist der ersten noch nicht abgegebenen Phase."""
         offen = self._phasenfristen[self._abgegebene_phasen:]
-        return self._termin_oder_ziel(offen[0] if offen else None)
+        return offen[0] if offen else None
 
     def naechste_aufgabe(self) -> str:
         return f"Phase {self._abgegebene_phasen + 1} abgeben"
+
+    def note_eintragen(self, note: Decimal, datum: date) -> None:
+        """Eine Note gibt es erst, wenn alle bekannten Phasen abgegeben sind."""
+        if self._phasenfristen and self._abgegebene_phasen < len(self._phasenfristen):
+            raise ValueError(f"Erst {self._abgegebene_phasen} von "
+                             f"{len(self._phasenfristen)} Phasen sind abgegeben")
+        super().note_eintragen(note, datum)
 
     def _termin_eintragen(self, datum: date) -> None:
         """Setzt die Frist der nächsten offenen Phase; fehlt sie, kommt sie hinzu.
@@ -328,6 +369,8 @@ class Portfolio(Pruefungsleistung):
         self._phasenfristen = neu
 
     def terminart(self) -> str:
+        if not self.ist_offen():                # alle Phasen abgegeben oder bewertet
+            return "Phasenfrist"
         return f"Frist Phase {self._abgegebene_phasen + 1}"
 
     def phasenstand(self) -> str:

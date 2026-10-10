@@ -13,6 +13,13 @@ from domain import Studiengang
 
 
 class StudiengangRepository(ABC):
+    """Schnittstelle der Datenhaltung: den ganzen Studiengang laden und speichern.
+
+    Gespeichert wird immer der vollständige Stand, nie eine einzelne
+    Änderung; Kennzahlen werden nicht gespeichert, sondern bei jeder Anzeige
+    neu berechnet.
+    """
+
     @abstractmethod
     def lade(self) -> Studiengang:
         """Liefert den gespeicherten Studiengang mit allen Teilen."""

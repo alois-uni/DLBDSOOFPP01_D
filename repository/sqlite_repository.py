@@ -86,20 +86,28 @@ CREATE TABLE IF NOT EXISTS studienziel (        -- Komposition
 
 
 def _text(wert: date | Decimal | None) -> str | None:
+    """Datum als ISO-Text, Decimal als Text; Text bewahrt die Nachkommastellen genau."""
     if wert is None:
         return None
     return wert.isoformat() if isinstance(wert, date) else str(wert)
 
 
 def _datum(text: str | None) -> date | None:
+    """Gegenstück zu _text für Datumswerte; leere Spalte wird None."""
     return date.fromisoformat(text) if text else None
 
 
 def _dezimal(text: str | None) -> Decimal | None:
+    """Gegenstück zu _text für Noten und Toleranzen."""
     return Decimal(text) if text is not None else None
 
 
 class SqliteStudiengangRepository(StudiengangRepository):
+    """Speichert den Studiengang in einer SQLite-Datei (daten/studium.db).
+
+    Die Datei enthält genau einen Studiengang mit der id 1.
+    """
+
     def __init__(self, dateipfad: Path) -> None:
         self._dateipfad = Path(dateipfad)
 
@@ -193,6 +201,12 @@ class SqliteStudiengangRepository(StudiengangRepository):
 
     # ------------------------------------------------------------ Laden
     def lade(self) -> Studiengang:
+        """Baut den Studiengang in fester Reihenfolge wieder auf.
+
+        Erst die Semester, dann die Module, dann die Zuordnungen. So hängt
+        jedes Semester an genau demselben Modulobjekt wie der Modulkatalog;
+        eine Kopie würde Änderungen am Modul im Semester nicht zeigen.
+        """
         if not self._dateipfad.exists():
             raise FileNotFoundError(f"Datenbank {self._dateipfad} fehlt")
         with closing(self._verbinde()) as verbindung:
@@ -245,6 +259,7 @@ class SqliteStudiengangRepository(StudiengangRepository):
 
     @staticmethod
     def _leistung_aus_zeile(art: str, werte: list, fristen: list[date]) -> Pruefungsleistung:
+        """Wählt über die Spalte art die Unterklasse (Werte durch CHECK gesichert)."""
         bezeichnung, status, versuch, note, bewertet_am, zieltermin, termin, phasen = werte
         zustand = dict(bezeichnung=bezeichnung, status=Pruefungsstatus(status),
                        versuchsnummer=versuch, note=_dezimal(note),

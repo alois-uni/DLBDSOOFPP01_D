@@ -23,10 +23,19 @@ DATUMSFORMAT = "%d.%m.%Y"
 
 
 def _note_text(note: Decimal) -> str:
+    """Note mit einer Nachkommastelle und Dezimalkomma, z. B. 1,3."""
     return f"{note:.1f}".replace(".", ",")
 
 
 class ErfassungsDialog:
+    """Eigenes Fenster für alle Eingaben zu einem ausgewählten Modul.
+
+    Nach jeder gespeicherten Änderung ruft der Dialog bei_aenderung auf,
+    damit das Dashboard neu zeichnet, und lädt seine Modulliste neu.
+    Knöpfe, die für das gewählte Modul nichts bewirken können, sind
+    ausgegraut.
+    """
+
     def __init__(self, eltern: tk.Misc, controller: DashboardController,
                  bei_aenderung: Callable[[], None]) -> None:
         self._controller = controller
@@ -77,8 +86,9 @@ class ErfassungsDialog:
         self._status = ttk.Combobox(rahmen, state="readonly", width=14,
                                     values=[s.anzeige for s in self._status_werte])
         self._status.grid(row=5, column=1, sticky="w", pady=3)
-        ttk.Button(rahmen, text="Status setzen",
-                   command=self._status_setzen).grid(row=5, column=2, sticky="we")
+        self._status_knopf = ttk.Button(rahmen, text="Status setzen",
+                                        command=self._status_setzen)
+        self._status_knopf.grid(row=5, column=2, sticky="we")
 
         ttk.Label(rahmen, text="Portfolio").grid(row=6, column=0, sticky="w")
         self._phase = ttk.Button(rahmen, text="Nächste Phase abgeben",
@@ -91,8 +101,9 @@ class ErfassungsDialog:
         self._semester = ttk.Combobox(rahmen, state="readonly", width=14,
                                       values=self._semester_werte)
         self._semester.grid(row=7, column=1, sticky="w", pady=3)
-        ttk.Button(rahmen, text="Zuordnen",
-                   command=self._modul_zuordnen).grid(row=7, column=2, sticky="we")
+        self._zuordnen_knopf = ttk.Button(rahmen, text="Zuordnen",
+                                          command=self._modul_zuordnen)
+        self._zuordnen_knopf.grid(row=7, column=2, sticky="we")
 
         self._meldung = ttk.Label(rahmen, wraplength=560)
         self._meldung.grid(row=8, column=0, columnspan=4, sticky="w", pady=(12, 6))
@@ -103,14 +114,17 @@ class ErfassungsDialog:
 
     # ------------------------------------------------------------ für die View
     def ist_offen(self) -> bool:
+        """Ist das Fenster noch geöffnet? Verhindert einen zweiten Dialog."""
         return bool(self._fenster.winfo_exists())
 
     def nach_vorne(self) -> None:
+        """Holt den offenen Dialog vor das Hauptfenster."""
         self._fenster.lift()
         self._fenster.focus_force()
 
     # ------------------------------------------------------------ Anzeige
     def _lade_module(self, kuerzel: str | None = None) -> None:
+        """Füllt die Modulauswahl neu und wählt kuerzel wieder aus."""
         self._module = self._controller.erfassbare_module()
         texte = []
         for m in self._module:
@@ -130,10 +144,12 @@ class ErfassungsDialog:
         return self._module[index] if 0 <= index < len(self._module) else None
 
     def _zeige_modul(self) -> None:
+        """Zeigt den Stand des gewählten Moduls und passt Knöpfe und Beschriftungen an."""
         modul = self._gewaehlt()
         if modul is None:
             return
-        teile = [f"Kürzel {modul.kuerzel}", f"{modul.ects} ECTS", modul.status.anzeige]
+        teile = [f"Kürzel {modul.kuerzel}", f"{modul.ects} ECTS", modul.status.anzeige,
+                 f"Versuch {modul.versuch} von {modul.max_versuche}"]
         if modul.note is not None:
             teile.append(f"Note {_note_text(modul.note)}"
                          + (f" vom {modul.bewertet_am:{DATUMSFORMAT}}" if modul.bewertet_am else ""))
@@ -145,6 +161,9 @@ class ErfassungsDialog:
         self._note_knopf["text"] = ("Note korrigieren (Datum bleibt)" if modul.note is not None
                                     else "Note eintragen (Bewertungsdatum = Datum)")
         self._termin_knopf["text"] = f"{modul.terminart} setzen (= Datum)"
+        # Termine gibt es nur für geplante oder angemeldete Prüfungen
+        offen = modul.status in (Pruefungsstatus.GEPLANT, Pruefungsstatus.ANGEMELDET)
+        self._termin_knopf.state(["!disabled"] if offen else ["disabled"])
         self._phase.state(["!disabled"] if modul.ist_portfolio else ["disabled"])
         self._entfernen_knopf.state(["!disabled"] if modul.note is not None else ["disabled"])
         self._semester.current(modul.semester or 0)
@@ -169,6 +188,7 @@ class ErfassungsDialog:
         self._lade_module(modul.kuerzel)
 
     def _melde(self, text: str) -> None:
+        """Zeigt eine Fehlermeldung in Rot unter den Eingaben."""
         self._meldung.configure(text=text, foreground=ROT)
 
     def _gelesenes_datum(self) -> date | None:

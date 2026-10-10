@@ -43,6 +43,12 @@ class KennzahlenTest(unittest.TestCase):
                                   "geplant zum 05.02.2027 (noch 16 Tage), Termin noch "
                                   "nicht gebucht.")
 
+    def test_regel_gebuchter_termin_am_tag_des_zieltermins(self):
+        self.sg.modul("MATHE").pruefungsleistung.termin_setzen(date(2027, 2, 5))
+        hinweis = self.service.handlungshinweis(self.sg, STICHTAG_SKIZZE)
+        self.assertEqual(hinweis, "«Mathematik Grundlagen I»: Klausur schreiben bis "
+                                  "05.02.2027 (noch 16 Tage).")
+
     def test_regel_ueberschrittene_frist_hat_vorrang(self):
         hinweis = self.service.handlungshinweis(self.sg, date(2027, 2, 6))
         self.assertTrue(hinweis.startswith("Frist überschritten: «Mathematik Grundlagen I»"))
@@ -129,10 +135,34 @@ class ControllerTest(unittest.TestCase):
 
     def test_note_mit_eigenem_datum_und_korrektur(self):
         c, repository = controller()
-        c.note_eintragen("MATHE", Decimal("2.3"), date(2027, 2, 6))
-        c.note_eintragen("MATHE", Decimal("1.3"), date(2027, 2, 9))   # Korrektur
+        c.note_eintragen("MATHE", Decimal("2.3"), date(2027, 1, 18))
+        c.note_eintragen("MATHE", Decimal("1.3"), date(2027, 1, 19))  # Korrektur
         pl = repository.lade().modul("MATHE").pruefungsleistung
-        self.assertEqual((pl.note, pl.bewertet_am), (Decimal("1.3"), date(2027, 2, 6)))
+        self.assertEqual((pl.note, pl.bewertet_am), (Decimal("1.3"), date(2027, 1, 18)))
+
+    def test_unplausible_gesamtzustaende_werden_abgelehnt(self):
+        c, repository = controller()
+        faelle = [
+            ("Note in der Zukunft", lambda: c.note_eintragen("MATHE", Decimal("1.0"),
+                                                             date(2027, 1, 21))),
+            ("Note vor Studienbeginn", lambda: c.note_eintragen("MATHE", Decimal("1.0"),
+                                                                date(2026, 8, 9))),
+            ("Note ohne Semester", lambda: c.note_eintragen("BA", Decimal("1.0"))),
+            ("Termin vor Studienbeginn", lambda: c.termin_setzen("MATHE", date(2026, 1, 1))),
+            ("benotetes Modul aus dem Semester", lambda: c.modul_zuordnen("PY", 0)),
+        ]
+        for name, aktion in faelle:
+            with self.subTest(name), self.assertRaises(ValueError):
+                aktion()
+        self.assertEqual(repository.anzahl_speichervorgaenge, 0)
+        c.modul_zuordnen("PY", 2)                     # verschieben bleibt erlaubt
+
+    def test_versuch_steht_im_dto(self):
+        c, _ = controller()
+        c.note_eintragen("MATHE", Decimal("5.0"))
+        c.status_setzen("MATHE", Pruefungsstatus.ANGEMELDET)
+        mathe = next(m for m in c.erfassbare_module() if m.kuerzel == "MATHE")
+        self.assertEqual((mathe.versuch, mathe.max_versuche), (2, 3))
 
     def test_note_entfernen_ueber_den_controller(self):
         c, repository = controller()

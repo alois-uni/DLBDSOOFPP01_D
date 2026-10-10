@@ -2,8 +2,8 @@
 
 ampelstatus() ist nur einmal in der Oberklasse umgesetzt und ruft die
 abstrakte Methode abweichung() auf. Jedes Ziel misst seine Abweichung in der
-Einheit seiner Toleranz: das Abschlussziel in Modulen, das Notenziel in
-Notenpunkten. Ein drittes Ziel bräuchte nur eine neue Unterklasse.
+Einheit seiner Toleranz: das Abschlussziel in Modulen, das Notenziel als
+Differenz zur Zielnote. Ein drittes Ziel bräuchte nur eine neue Unterklasse.
 """
 
 from __future__ import annotations
@@ -24,6 +24,13 @@ ECTS_JE_MODUL = 5
 
 
 class Studienziel(ABC):
+    """Abstrakte Oberklasse der Studienziele.
+
+    toleranz legt fest, wie weit ein Ziel verfehlt sein darf, bevor die
+    Ampel von gelb auf rot springt. Ein inaktives Ziel bleibt gespeichert,
+    erscheint aber nicht auf dem Dashboard.
+    """
+
     def __init__(self, bezeichnung: str, toleranz: Decimal, ist_aktiv: bool = True) -> None:
         if toleranz < 0:
             raise ValueError("Die Toleranz darf nicht negativ sein")
@@ -51,6 +58,11 @@ class Studienziel(ABC):
         """
 
     def ampelstatus(self, sg: Studiengang, stichtag: date) -> Ampel:
+        """Grün ohne Rückstand, gelb innerhalb der Toleranz, sonst rot.
+
+        Lässt sich noch nichts sagen (abweichung() liefert None), ist die
+        Ampel grün, damit ein neues Studium nicht mit Rot beginnt.
+        """
         abweichung = self.abweichung(sg, stichtag)
         if abweichung is None or abweichung <= 0:
             return Ampel.GRUEN
@@ -108,7 +120,7 @@ class Notenziel(Studienziel):
         return self._ziel_durchschnitt
 
     def abweichung(self, sg: Studiengang, stichtag: date) -> Decimal | None:
-        """Abstand des Durchschnitts zum Ziel in Notenpunkten; None ohne Note."""
+        """Differenz zwischen Durchschnitt und Zielnote; None ohne Note."""
         durchschnitt = sg.notendurchschnitt()
         if durchschnitt is None:
             return None

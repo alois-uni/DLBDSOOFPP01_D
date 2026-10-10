@@ -39,6 +39,8 @@ Unter macOS und Linux `python3` statt `py`.
 py -m unittest
 ```
 
+Neben den Einzeltests spielt `tests/test_zufallsbedienung.py` Tausende zufällige Bedienfolgen sowie alle Folgen aus drei Aktionen je Prüfungsform durch und prüft nach jedem Schritt die fachlichen Regeln. Mit der Umgebungsvariablen `DASHBOARD_PROTOKOLL=protokoll.csv` schreibt er jeden Schritt in eine CSV-Datei.
+
 ## Projektstruktur
 
 ```

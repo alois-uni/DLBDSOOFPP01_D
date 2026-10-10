@@ -15,8 +15,8 @@ from __future__ import annotations
 from datetime import date, timedelta
 from decimal import Decimal
 
-from domain import (SETZBARE_STATUS, ZULAESSIGE_NOTEN, Abschlussziel, Modul, Notenziel,
-                    Portfolio, Pruefungsstatus, Studiengang, Studienziel)
+from domain import (MAX_VERSUCHE, SETZBARE_STATUS, ZULAESSIGE_NOTEN, Abschlussziel, Modul,
+                    Notenziel, Portfolio, Pruefungsstatus, Studiengang, Studienziel)
 from dto import DashboardDTO, ModulDTO, ZielDTO
 from repository import StudiengangRepository
 from service.erfassungs_service import ErfassungsService
@@ -29,6 +29,12 @@ def _zahl(wert: Decimal, stellen: int = 2) -> str:
 
 
 class DashboardController:
+    """Einzige Schnittstelle der Oberfläche zur Fachlogik.
+
+    Hält den geladenen Studiengang und den Stichtag. Die Oberfläche bekommt
+    nur DTOs und Kürzel; Entity-Objekte verlassen den Controller nicht.
+    """
+
     def __init__(self, repository: StudiengangRepository, kennzahlen: KennzahlenService,
                  erfassung: ErfassungsService, stichtag: date) -> None:
         self._repository = repository
@@ -43,6 +49,7 @@ class DashboardController:
 
     # ------------------------------------------------------------ Anzeige
     def dashboard_daten(self) -> DashboardDTO:
+        """Berechnet alle Werte der Bereiche A bis G für den Stichtag neu."""
         sg, tag = self._studiengang, self._stichtag
         aktuell = sg.aktuelles_semester(tag)
         module = aktuell.module if aktuell is not None else ()
@@ -83,9 +90,11 @@ class DashboardController:
         return tuple(sorted(ZULAESSIGE_NOTEN))
 
     def setzbare_status(self) -> tuple[Pruefungsstatus, ...]:
+        """Status, die der Dialog zur Auswahl anbietet."""
         return SETZBARE_STATUS
 
     def semesteranzahl(self) -> int:
+        """Anzahl der Semester für die Auswahl beim Zuordnen."""
         return self._studiengang.regelstudienzeit()
 
     # ------------------------------------------------------------ Erfassung
@@ -93,7 +102,8 @@ class DashboardController:
         """Trägt die Note ein; ohne Datum gilt der Stichtag als Bewertungsdatum."""
         modul = self._modul(kuerzel)
         bewertet_am = datum or self._stichtag
-        self._aendern(lambda: self._erfassung.note_eintragen(modul, note, bewertet_am))
+        self._aendern(lambda: self._erfassung.note_eintragen(
+            self._studiengang, modul, note, bewertet_am, self._stichtag))
 
     def note_entfernen(self, kuerzel: str) -> None:
         """Ergänzung in Phase 3: Note zurücknehmen."""
@@ -103,13 +113,15 @@ class DashboardController:
     def termin_setzen(self, kuerzel: str, datum: date) -> None:
         """Ergänzung in Phase 3: Prüfungstermin bzw. Frist eintragen."""
         modul = self._modul(kuerzel)
-        self._aendern(lambda: self._erfassung.termin_setzen(modul, datum))
+        self._aendern(lambda: self._erfassung.termin_setzen(self._studiengang, modul, datum))
 
     def status_setzen(self, kuerzel: str, status: Pruefungsstatus) -> None:
+        """Setzt geplant, angemeldet oder abgegeben."""
         modul = self._modul(kuerzel)
         self._aendern(lambda: self._erfassung.status_setzen(modul, status))
 
     def phase_abgeben(self, kuerzel: str) -> None:
+        """Gibt die nächste Phase eines Portfolios ab."""
         pl = self._modul(kuerzel).pruefungsleistung
         if not isinstance(pl, Portfolio):          # einzige Typprüfung dieser Art
             raise ValueError("Phasen gibt es nur bei einem Portfolio")
@@ -137,6 +149,7 @@ class DashboardController:
             raise
 
     def _modul(self, kuerzel: str) -> Modul:
+        """Sucht das Modul zum Kürzel aus dem Dialog; unbekannt ist ein ValueError."""
         modul = self._studiengang.modul(kuerzel)
         if modul is None:
             raise ValueError(f"Ein Modul {kuerzel} gibt es nicht")
@@ -147,6 +160,7 @@ class DashboardController:
         return semester.nummer if semester else None
 
     def _modul_dto(self, modul: Modul) -> ModulDTO:
+        """Kopiert die angezeigten Werte eines Moduls in ein unveränderliches DTO."""
         pl = modul.pruefungsleistung
         ist_portfolio = isinstance(pl, Portfolio)
         return ModulDTO(
@@ -156,7 +170,8 @@ class DashboardController:
             semester=self._semesternummer(modul),
             ist_portfolio=ist_portfolio,
             phasen=pl.phasenstand() if ist_portfolio else "",
-            bewertet_am=pl.bewertet_am, terminart=pl.terminart())
+            bewertet_am=pl.bewertet_am, terminart=pl.terminart(),
+            versuch=pl.versuchsnummer, max_versuche=MAX_VERSUCHE)
 
     @staticmethod
     def _kopfzeile(sg: Studiengang, semester: int | None) -> str:
@@ -166,6 +181,11 @@ class DashboardController:
         return f"{studiengang} · {semester}. Semester"
 
     def _ziel_dto(self, nr: int, ziel: Studienziel) -> ZielDTO:
+        """Formuliert Wert und Aussage einer Zielkachel.
+
+        Beim Abschlussziel nennt die Aussage, wie viele ECTS am Ende des
+        laufenden Semesters erreicht sein sollen.
+        """
         sg, tag = self._studiengang, self._stichtag
         ampel = ziel.ampelstatus(sg, tag)
         titel = f"ZIEL {nr} · {ziel.bezeichnung}"

@@ -16,10 +16,12 @@ from domain import Ampel, Modul, Pruefungsstatus, Studiengang
 #: Termine innerhalb dieser Frist meldet Bereich G als nächste Handlung.
 VORLAUF_TAGE = 30
 
+#: In Bearbeitung: Die Prüfung ist begonnen, die Note fehlt noch.
 LAUFENDE_STATUS = (Pruefungsstatus.ANGEMELDET, Pruefungsstatus.ABGEGEBEN)
 
 
 def datum_text(tag: date) -> str:
+    """Datum in deutscher Schreibweise, z. B. 05.02.2027."""
     return tag.strftime("%d.%m.%Y")
 
 
@@ -30,6 +32,12 @@ def _tage_text(tage: int) -> str:
 
 
 class KennzahlenService:
+    """Berechnet die Werte der Bereiche C bis G aus dem Studiengang.
+
+    Die Methoden ändern nichts und speichern nichts; derselbe Studiengang
+    und derselbe Stichtag ergeben immer dieselben Werte.
+    """
+
     def laufende_ects(self, sg: Studiengang) -> int:
         """ECTS in Bearbeitung: angemeldet oder abgegeben, aber noch nicht bewertet."""
         return sum(m.ects for m in sg.module
@@ -67,6 +75,7 @@ class KennzahlenService:
         return verlauf
 
     def ausstehende_bewertungen(self, sg: Studiengang) -> list[Modul]:
+        """Abgegebene Module ohne Note; Bereich G nennt sie zusätzlich."""
         return [m for m in sg.module
                 if m.pruefungsleistung.status is Pruefungsstatus.ABGEGEBEN]
 
@@ -99,7 +108,7 @@ class KennzahlenService:
             termin, modul = bald[0]
             pl = modul.pruefungsleistung
             tage = _tage_text((termin - stichtag).days)
-            if termin == pl.zieltermin:
+            if pl.ist_selbst_geplant():
                 return (f"«{modul.bezeichnung}»: {pl.naechste_aufgabe()}, selbst geplant "
                         f"zum {datum_text(termin)} ({tage}), Termin noch nicht gebucht.")
             return (f"«{modul.bezeichnung}»: {pl.naechste_aufgabe()} bis "

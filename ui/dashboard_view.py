@@ -33,21 +33,30 @@ STATUSFARBE = {
     Pruefungsstatus.NICHT_BESTANDEN: ROT,
 }
 
+# Maße in Pixeln; unterhalb der Mindestgröße überlappen sich die Bereiche.
 RAND_AUSSEN, ABSTAND = 16, 10
 MIN_BREITE, HOEHE = 1040, 690
 
 
 def _zahl(wert: Decimal, stellen: int = 1) -> str:
+    """Zahl mit Dezimalkomma für die Anzeige."""
     return f"{wert:.{stellen}f}".replace(".", ",")
 
 
 class DashboardView:
+    """Hauptfenster: zeichnet die Bereiche A bis G auf eine Canvas.
+
+    Bei jeder Änderung und jeder Größenänderung wird die ganze Canvas neu
+    gezeichnet. Das ist einfacher als einzelne Elemente nachzuführen und
+    dauert nur wenige Millisekunden.
+    """
+
     def __init__(self, fenster: tk.Tk, controller: DashboardController) -> None:
         self._fenster = fenster
         self._controller = controller
         self._daten: DashboardDTO | None = None
         self._dialog: ErfassungsDialog | None = None
-        self._nachzeichnen: str | None = None
+        self._letzte_groesse: tuple[int, int] = (0, 0)
 
         fenster.title("Studien-Dashboard")
         hoehe = max(HOEHE, min(760, fenster.winfo_screenheight() - 80))
@@ -78,13 +87,19 @@ class DashboardView:
         self._zeichne(self._daten)
 
     # ------------------------------------------------------------ Ereignisse
-    def _groesse_geaendert(self, _ereignis) -> None:
-        if self._nachzeichnen:
-            self._fenster.after_cancel(self._nachzeichnen)
-        self._nachzeichnen = self._fenster.after(
-            60, lambda: self._daten and self._zeichne(self._daten))
+    def _groesse_geaendert(self, ereignis) -> None:
+        """Zeichnet beim Ziehen sofort neu, damit sich das Layout live anpasst.
+
+        Ein Neuzeichnen dauert wenige Millisekunden; nur wenn sich die Größe
+        tatsächlich geändert hat, wird neu gezeichnet.
+        """
+        groesse = (ereignis.width, ereignis.height)
+        if self._daten is not None and groesse != self._letzte_groesse:
+            self._letzte_groesse = groesse
+            self._zeichne(self._daten)
 
     def _oeffne_erfassung(self) -> None:
+        """Öffnet den Erfassungsdialog; ist er schon offen, holt es ihn nach vorn."""
         if self._dialog is not None and self._dialog.ist_offen():
             self._dialog.nach_vorne()
             return
@@ -93,6 +108,11 @@ class DashboardView:
 
     # ------------------------------------------------------------ Zeichnen
     def _zeichne(self, daten: DashboardDTO) -> None:
+        """Ordnet die Bereiche von oben nach unten an wie in der Skizze.
+
+        Kopf, A und B, C, D und E nebeneinander, F, G. Nur F wächst mit der
+        Fensterhöhe, damit mehr Module Platz finden.
+        """
         c = self._canvas
         c.delete("all")
         breite = max(c.winfo_width(), MIN_BREITE)
@@ -123,6 +143,7 @@ class DashboardView:
         self._zeichne_hinweis(daten, x0, unten - hoehe_g, x1, unten)
 
     def _rahmen(self, x0, y0, x1, y1, kennung: str, titel: str | None = None) -> None:
+        """Weißer Kasten mit Bereichsbuchstaben oben rechts wie in der Skizze."""
         c = self._canvas
         c.create_rectangle(x0, y0, x1, y1, fill="white", outline=RAND)
         c.create_text(x1 - 6, y0 + 4, anchor="ne", text=kennung,
@@ -132,6 +153,7 @@ class DashboardView:
                           font=self._schrift["titel"], fill=TEXT)
 
     def _zeichne_kopf(self, daten: DashboardDTO, x0, x1, y) -> int:
+        """Kopfzeile mit Studiengang, Stichtag und Knopf; liefert die Unterkante."""
         c, hoehe = self._canvas, 44
         c.create_rectangle(x0, y, x1, y + hoehe, fill=KOPF, outline=KOPF)
         c.create_text(x0 + 14, y + hoehe / 2, anchor="w", text="Studien-Dashboard",
@@ -145,6 +167,7 @@ class DashboardView:
         return y + hoehe
 
     def _zeichne_kachel(self, x0, y0, x1, y1, titel, wert, aussage, farbe, kennung) -> None:
+        """Zielkachel A oder B; der farbige Streifen links ist die Ampel."""
         c = self._canvas
         self._rahmen(x0, y0, x1, y1, kennung)
         c.create_rectangle(x0, y0, x0 + 8, y1, fill=farbe, outline=farbe)
@@ -156,6 +179,7 @@ class DashboardView:
                       font=self._schrift["normal"], fill=farbe)
 
     def _zeichne_fortschritt(self, daten: DashboardDTO, x0, y0, x1, y1) -> None:
+        """Bereich C: Balken über das ganze Studium, Marker beim tagesgenauen Sollwert."""
         c = self._canvas
         self._rahmen(x0, y0, x1, y1, "C", "ECTS-Fortschritt im Gesamtstudium")
         bx0, bx1, by = x0 + 14, x1 - 150, y0 + 36
@@ -186,6 +210,11 @@ class DashboardView:
             lx += 130
 
     def _zeichne_notenverlauf(self, daten: DashboardDTO, x0, y0, x1, y1) -> None:
+        """Bereich D: Durchschnitt nach jeder Bewertung, Zielnote als rote Linie.
+
+        Die Punkte stehen in gleichen Abständen, weil die Achse die
+        Reihenfolge der Bewertungen zeigt und keine Kalenderzeit.
+        """
         c = self._canvas
         self._rahmen(x0, y0, x1, y1, "D", "Entwicklung des Notendurchschnitts")
         gx0, gx1, gy0, gy1 = x0 + 46, x1 - 70, y0 + 34, y1 - 30
@@ -224,6 +253,11 @@ class DashboardView:
                       font=self._schrift["klein"], fill=GRAU)
 
     def _zeichne_semester(self, daten: DashboardDTO, x0, y0, x1, y1) -> None:
+        """Bereich E: gestapelte Säulen je Semester (bestanden, laufend, geplant).
+
+        Der gestrichelte Rahmen zeigt das Soll von 30 ECTS. Hat ein Semester
+        mehr ECTS, wächst die Skala mit, damit keine Säule abgeschnitten wird.
+        """
         c = self._canvas
         self._rahmen(x0, y0, x1, y1, "E", "ECTS je Semester, Ist gegen Soll")
         gx0, gx1, gy0, gy1 = x0 + 40, x1 - 20, y0 + 34, y1 - 42
@@ -261,6 +295,10 @@ class DashboardView:
                       font=self._schrift["klein"], fill=GRAU)
 
     def _zeichne_module(self, daten: DashboardDTO, x0, y0, x1, y1) -> None:
+        """Bereich F: Tabelle der Module im aktuellen Semester.
+
+        Passen nicht alle Zeilen, steht unten rechts, wie viele fehlen.
+        """
         c = self._canvas
         titel = ("Module im aktuellen Semester" if daten.aktuelles_semester
                  else "Module (kein laufendes Semester)")
@@ -289,10 +327,13 @@ class DashboardView:
                           font=self._schrift["klein"], fill=GRAU)
 
     def _zeile(self, modul: ModulDTO, kx: list[float], y: float, namensbreite: float) -> None:
+        """Eine Tabellenzeile in F; nur die Statusspalte ist farbig."""
         c, n = self._canvas, self._schrift["normal"]
         status = modul.status.anzeige
         if modul.ist_portfolio and modul.status is Pruefungsstatus.ANGEMELDET:
             status += f", {modul.phasen}".replace(" Phasen abgegeben", " Ph.")
+        if modul.versuch > 1:
+            status += f" ({modul.versuch}. Versuch)"
         werte = [self._kuerzen(modul.bezeichnung, namensbreite), str(modul.ects),
                  modul.pruefungsform, status,
                  _zahl(modul.note) if modul.note is not None else "–",
@@ -302,6 +343,7 @@ class DashboardView:
             c.create_text(x, y, anchor="w", text=wert, font=n, fill=farbe)
 
     def _zeichne_hinweis(self, daten: DashboardDTO, x0, y0, x1, y1) -> None:
+        """Bereich G: nächste Handlung, darunter ausstehende Bewertungen."""
         c = self._canvas
         self._rahmen(x0, y0, x1, y1, "G")
         c.create_rectangle(x0, y0, x0 + 8, y1, fill=GELB, outline=GELB)
