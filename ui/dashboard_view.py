@@ -72,6 +72,7 @@ class DashboardView:
         }
         self._messen = tkfont.Font(fenster, font=self._schrift["normal"])
         self._messen_fett = tkfont.Font(fenster, font=self._schrift["fett"])
+        self._messen_klein = tkfont.Font(fenster, font=self._schrift["klein"])
 
         self._canvas = tk.Canvas(fenster, bg=HINTERGRUND, highlightthickness=0)
         self._canvas.pack(fill="both", expand=True)
@@ -192,22 +193,29 @@ class DashboardView:
             c.create_rectangle(ende_b, by, ende_l, by + hoehe, fill=BLAU_HELL, outline=BLAU_HELL)
         if daten.ects_bestanden:
             c.create_rectangle(bx0, by, ende_b, by + hoehe, fill=GRUEN, outline=GRUEN)
+        # Unter dem Balken steht nur die Beschriftung des Markers. Er wandert mit
+        # der Zeit über die ganze Breite; die Legende steht deshalb in der
+        # Titelzeile, sonst überdecken sich beide, sobald der Marker die Mitte
+        # erreicht (ab dem 3. Semester).
         marker = bx0 + float(daten.ects_soll_heute) * skala
         c.create_line(marker, by - 6, marker, by + hoehe + 6, fill=TEXT, width=2)
-        c.create_text(marker + 4, by + hoehe + 12, anchor="w",
-                      text=f"Soll heute: {_zahl(daten.ects_soll_heute)} ECTS",
+        beschriftung = f"Soll heute: {_zahl(daten.ects_soll_heute)} ECTS"
+        breite = self._messen_klein.measure(beschriftung)
+        rechts_davon = marker + 4 + breite <= bx1
+        c.create_text(marker + 4 if rechts_davon else marker - 4, by + hoehe + 12,
+                      anchor="w" if rechts_davon else "e", text=beschriftung,
                       font=self._schrift["klein"], fill=TEXT)
         c.create_text(x1 - 136, by + hoehe / 2, anchor="w",
                       text=f"{daten.ects_bestanden + daten.ects_laufend} / {gesamt} ECTS",
                       font=self._schrift["fett"], fill=TEXT)
-        lx = (bx0 + bx1) / 2
-        for farbe, text in ((GRUEN, f"bestanden ({daten.ects_bestanden})"),
-                            (BLAU_HELL, f"in Bearbeitung ({daten.ects_laufend})")):
-            c.create_rectangle(lx, by + hoehe + 8, lx + 10, by + hoehe + 16,
-                               fill=farbe, outline=farbe)
-            c.create_text(lx + 14, by + hoehe + 12, anchor="w", text=text,
+        lx = bx1                                   # Legende rechtsbündig in der Titelzeile
+        for farbe, text in ((BLAU_HELL, f"in Bearbeitung ({daten.ects_laufend})"),
+                            (GRUEN, f"bestanden ({daten.ects_bestanden})")):
+            c.create_text(lx, y0 + 14, anchor="e", text=text,
                           font=self._schrift["klein"], fill=GRAU)
-            lx += 130
+            lx -= self._messen_klein.measure(text) + 4
+            c.create_rectangle(lx - 10, y0 + 10, lx, y0 + 18, fill=farbe, outline=farbe)
+            lx -= 24
 
     def _zeichne_notenverlauf(self, daten: DashboardDTO, x0, y0, x1, y1) -> None:
         """Bereich D: Durchschnitt nach jeder Bewertung, Zielnote als rote Linie.
