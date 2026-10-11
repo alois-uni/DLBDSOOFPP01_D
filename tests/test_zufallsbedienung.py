@@ -42,12 +42,16 @@ from werkzeuge.beispieldatenbank_erzeugen import DATEN, erzeuge_studiengang
 STARTWERT = 20261010
 SCHRITTE = 2000
 RUNDREISE_ALLE = 250          # so oft wird zusätzlich über SQLite gespeichert und geladen
-STICHTAG = date(2026, 10, 10)
 NOTEN = sorted(ZULAESSIGE_NOTEN)
 STATUS = (Pruefungsstatus.GEPLANT, Pruefungsstatus.ANGEMELDET, Pruefungsstatus.ABGEGEBEN)
 
 
 _VORLAGE = erzeuge_studiengang(DATEN / "module.csv", DATEN / "stand.csv")
+
+# Stand der Beispieldaten: das letzte Bewertungsdatum, frühestens der 10.10.2026.
+# So bleibt der Test gültig, wenn in stand.csv eine neue Note nachgetragen wird.
+STICHTAG = max([date(2026, 10, 10)] + [m.pruefungsleistung.bewertet_am for m in _VORLAGE.module
+                                       if m.pruefungsleistung.bewertet_am is not None])
 
 
 def _auszug(kuerzel: str) -> Studiengang:

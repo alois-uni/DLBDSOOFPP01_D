@@ -42,6 +42,14 @@ py -m unittest
 
 Neben den Einzeltests spielt `tests/test_zufallsbedienung.py` Tausende zufällige Bedienfolgen sowie alle Folgen aus drei Aktionen je Prüfungsform durch und prüft nach jedem Schritt die fachlichen Regeln. Mit der Umgebungsvariablen `DASHBOARD_PROTOKOLL=protokoll.csv` schreibt er jeden Schritt in eine CSV-Datei.
 
+Für eine gründlichere Prüfung gibt es `werkzeuge/tiefentest.py`. Er sucht für jede Prüfungsform alle Zustände, die sich mit den Knöpfen des Dialogs erreichen lassen, spielt lange Zufallsfolgen am ganzen Studiengang durch und prüft viele Stichtage und Studienbeginne, das Speichern und Laden sowie die Darstellung in echten Fenstern. Er läuft einige Minuten und wird von Hand gestartet:
+
+```
+py werkzeuge/tiefentest.py
+py werkzeuge/tiefentest.py --schnell        # unter einer Minute
+py werkzeuge/tiefentest.py --ohne-fenster   # ohne Prüfung der Darstellung
+```
+
 ## Projektstruktur
 
 ```
@@ -52,7 +60,7 @@ dto/             Transportobjekte für die Oberfläche
 controller/      Vermittlung zwischen Oberfläche und Fachlogik
 ui/              Oberfläche mit tkinter
 daten/           Stammdaten (CSV) und Beispieldatenbank
-werkzeuge/       Erzeugen der Beispieldatenbank aus den CSV-Dateien
+werkzeuge/       Erzeugen der Beispieldatenbank, Tiefentest
 tests/           unittest-Tests
 testprogramme/   Testprogramme aus Konzeption (Phase 1) und Reflexion (Phase 2)
 ```

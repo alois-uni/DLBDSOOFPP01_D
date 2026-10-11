@@ -131,6 +131,8 @@ class Pruefungsleistung(ABC):
 
         Eine Anmeldung nach einem nicht bestandenen Versuch beginnt den
         nächsten Versuch; mehr als drei Versuche lässt die Methode nicht zu.
+        Der neue Versuch beginnt ohne Note und ohne die Termine und Fristen
+        des alten, die sonst sofort als überschritten gemeldet würden.
         """
         if status not in SETZBARE_STATUS:
             raise ValueError("Bestanden und nicht bestanden ergeben sich aus der Note")
@@ -145,6 +147,7 @@ class Pruefungsleistung(ABC):
             self._versuchsnummer += 1
             self._note = None
             self._bewertet_am = None
+            self._termine_leeren()
         self._status = status
 
     def note_eintragen(self, note: Decimal, datum: date) -> None:
@@ -175,6 +178,13 @@ class Pruefungsleistung(ABC):
     @abstractmethod
     def _gebuchter_termin(self) -> date | None:
         """Gegenstück zu _termin_eintragen: der gebuchte Termin bzw. die Frist, sonst None."""
+
+    @abstractmethod
+    def _termine_leeren(self) -> None:
+        """Entfernt die gebuchten Termine bzw. Fristen für einen neuen Versuch.
+
+        Der selbst geplante Zieltermin bleibt, er gehört zu keinem Versuch.
+        """
 
     @abstractmethod
     def terminart(self) -> str:
@@ -232,6 +242,9 @@ class Klausur(Pruefungsleistung):
     def _gebuchter_termin(self) -> date | None:
         return self._pruefungstermin
 
+    def _termine_leeren(self) -> None:
+        self._pruefungstermin = None
+
     def terminart(self) -> str:
         return "Prüfungstermin"
 
@@ -257,6 +270,9 @@ class AdvancedWorkbook(Pruefungsleistung):
 
     def _gebuchter_termin(self) -> date | None:
         return self._abgabefrist
+
+    def _termine_leeren(self) -> None:
+        self._abgabefrist = None
 
     def terminart(self) -> str:
         return "Abgabefrist"
@@ -288,6 +304,9 @@ class SchriftlicheArbeit(Pruefungsleistung):
 
     def _gebuchter_termin(self) -> date | None:
         return self._abgabefrist
+
+    def _termine_leeren(self) -> None:
+        self._abgabefrist = None
 
     def terminart(self) -> str:
         return "Abgabefrist"
@@ -378,6 +397,11 @@ class Portfolio(Pruefungsleistung):
             raise ValueError(f"Die Frist {datum:%d.%m.%Y} passt nicht in die "
                              "Reihenfolge der Phasen")
         self._phasenfristen = neu
+
+    def _termine_leeren(self) -> None:
+        """Ein neuer Versuch beginnt mit Phase 1 und eigenen Fristen."""
+        self._phasenfristen = []
+        self._abgegebene_phasen = 0
 
     def terminart(self) -> str:
         if not self.ist_offen():                # alle Phasen abgegeben oder bewertet

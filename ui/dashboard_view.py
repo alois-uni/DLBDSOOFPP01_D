@@ -254,8 +254,16 @@ class DashboardView:
                 c.create_line(punkte, fill=BLAU, width=2)
             for px, py in punkte:
                 c.create_oval(px - 3, py - 3, px + 3, py + 3, fill=BLAU, outline="white")
-            c.create_text(punkte[-1][0], punkte[-1][1] - 10, anchor="s",
-                          text=_zahl(werte[-1], 2), font=self._schrift["klein"], fill=BLAU)
+            # Beschriftung des letzten Punkts rechtsbündig am Punkt, damit sie nie
+            # in die Beschriftung der Ziellinie rechts daneben ragt; nahe 1,0
+            # unter den Punkt, sonst stößt sie an die Überschrift.
+            px, py = punkte[-1]
+            if py - 18 >= gy0:
+                c.create_text(px + 4, py - 6, anchor="se", text=_zahl(werte[-1], 2),
+                              font=self._schrift["klein"], fill=BLAU)
+            else:
+                c.create_text(px + 4, py + 6, anchor="ne", text=_zahl(werte[-1], 2),
+                              font=self._schrift["klein"], fill=BLAU)
         c.create_text(gx0, y1 - 12, anchor="w",
                       text="Zeitachse: Reihenfolge der Bewertungen",
                       font=self._schrift["klein"], fill=GRAU)
@@ -337,11 +345,7 @@ class DashboardView:
     def _zeile(self, modul: ModulDTO, kx: list[float], y: float, namensbreite: float) -> None:
         """Eine Tabellenzeile in F; nur die Statusspalte ist farbig."""
         c, n = self._canvas, self._schrift["normal"]
-        status = modul.status.anzeige
-        if modul.ist_portfolio and modul.status is Pruefungsstatus.ANGEMELDET:
-            status += f", {modul.phasen}".replace(" Phasen abgegeben", " Ph.")
-        if modul.versuch > 1:
-            status += f" ({modul.versuch}. Versuch)"
+        status = self._statustext(modul, kx[4] - kx[3] - 10)   # bis vor die Notenspalte
         werte = [self._kuerzen(modul.bezeichnung, namensbreite), str(modul.ects),
                  modul.pruefungsform, status,
                  _zahl(modul.note) if modul.note is not None else "–",
@@ -349,6 +353,29 @@ class DashboardView:
         for i, (wert, x) in enumerate(zip(werte, kx)):
             farbe = STATUSFARBE[modul.status] if i == 3 else TEXT
             c.create_text(x, y, anchor="w", text=wert, font=n, fill=farbe)
+
+    def _statustext(self, modul: ModulDTO, breite: float) -> str:
+        """Status mit Phasenstand und Versuch, so ausführlich wie die Spalte erlaubt.
+
+        Reicht der Platz nicht, werden erst der Phasenstand, dann der Versuch
+        abgekürzt; erst danach wird der Text mit "…" gekürzt.
+        """
+        phasen = ""
+        if modul.ist_portfolio and modul.status is Pruefungsstatus.ANGEMELDET:
+            phasen = modul.phasen.replace(" Phasen abgegeben", " Ph.")
+        kurz = phasen.replace(" von ", "/")
+        versuch = f"{modul.versuch}. Versuch" if modul.versuch > 1 else ""
+        vorschlaege = [(phasen, f" ({versuch})"), (kurz, f" ({versuch})"),
+                       (kurz, f", {modul.versuch}. V.")]
+        for teil_phasen, teil_versuch in vorschlaege:
+            text = modul.status.anzeige
+            if teil_phasen:
+                text += f", {teil_phasen}"
+            if versuch:
+                text += teil_versuch
+            if self._messen.measure(text) <= breite:
+                return text
+        return self._kuerzen(text, breite)
 
     def _zeichne_hinweis(self, daten: DashboardDTO, x0, y0, x1, y1) -> None:
         """Bereich G: nächste Handlung, darunter ausstehende Bewertungen."""

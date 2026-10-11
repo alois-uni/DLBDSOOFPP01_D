@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import sqlite3
 import tempfile
 import unittest
@@ -89,7 +90,11 @@ class BeispieldatenTest(unittest.TestCase):
         self.assertEqual(len(sg.module), 62)
         pflicht = sum(m.ects for m in sg.module if m.kuerzel.startswith("P"))
         self.assertEqual(pflicht + 10 + 10 + 30, 180)        # Wahlpflicht A, B, C
-        self.assertEqual(sg.bestandene_ects(), 15)
+        with (DATEN / "stand.csv").open(encoding="utf-8-sig", newline="") as datei:
+            bestanden = {zeile["kuerzel"] for zeile in csv.DictReader(datei, delimiter=";")
+                         if zeile["status"].strip() == "bestanden"}
+        self.assertEqual(sg.bestandene_ects(),          # folgt stand.csv, auch nach Nachträgen
+                         sum(m.ects for m in sg.module if m.kuerzel in bestanden))
         self.assertEqual(len(sg.semester(1).module), 5)
 
     def test_mitgelieferte_beispieldatenbank_passt_zu_den_stammdaten(self):

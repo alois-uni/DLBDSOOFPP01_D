@@ -127,6 +127,26 @@ class PruefungsleistungTest(unittest.TestCase):
             klausur.status_setzen(Pruefungsstatus.ANGEMELDET)
         self.assertEqual(klausur.versuchsnummer, 3)
 
+    def test_neuer_versuch_beginnt_ohne_alte_termine(self):
+        # Sonst meldete Bereich G den Termin des alten Versuchs als überschritten.
+        for pl in (Klausur(date(2026, 9, 9)), AdvancedWorkbook(date(2026, 9, 9)),
+                   SchriftlicheArbeit(date(2026, 9, 9))):
+            pl.status_setzen(Pruefungsstatus.ANGEMELDET)
+            pl.note_eintragen(Decimal("5.0"), date(2026, 9, 20))
+            pl.status_setzen(Pruefungsstatus.ANGEMELDET)
+            self.assertEqual(pl.versuchsnummer, 2)
+            self.assertIsNone(pl.naechster_termin(), pl.FORM)
+
+    def test_neuer_versuch_beginnt_portfolio_mit_phase_1(self):
+        fristen = [date(2026, 9, 15), date(2026, 9, 30)]
+        portfolio = Portfolio(fristen, 2, status=Pruefungsstatus.ABGEGEBEN,
+                              zieltermin=date(2027, 3, 1))
+        portfolio.note_eintragen(Decimal("5.0"), date(2026, 10, 9))
+        portfolio.status_setzen(Pruefungsstatus.ANGEMELDET)
+        self.assertEqual((portfolio.phasenfristen, portfolio.abgegebene_phasen), ((), 0))
+        self.assertEqual(portfolio.terminart(), "Frist Phase 1")
+        self.assertEqual(portfolio.zieltermin, date(2027, 3, 1))   # Zieltermin bleibt
+
     def test_gespeicherter_zustand_wird_im_konstruktor_geprueft(self):
         with self.assertRaises(ValueError):
             Klausur(status=Pruefungsstatus.BESTANDEN, note=Decimal("2.2"),
