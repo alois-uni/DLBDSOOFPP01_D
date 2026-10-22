@@ -9,11 +9,13 @@ zulässige Notenstufen, höchstens drei Versuche, erlaubte Statuswechsel.
 Jede verändernde Methode prüft zuerst und ändert erst danach den Zustand,
 damit ein abgelehnter Aufruf das Objekt unverändert lässt.
 
-Erweiterungen gegenüber Phase 2 (siehe README):
+Erweiterungen gegenüber dem Entwurf aus Phase 2 (in den Klassendiagrammen
+blau markiert):
   * vierte Unterklasse SchriftlicheArbeit für Seminar, Bachelorarbeit und
     Praktikum
-  * Phasenfristen eines Portfolios mit Multiplizität [0..*], weil die
-    Fristen erst nach der Einschreibung feststehen
+  * Phasenfristen eines Portfolios mit Multiplizität [0..3], weil die
+    Fristen erst nach der Einschreibung feststehen; ein Portfolio hat immer
+    drei Phasen, die Abgabe der dritten ist die finale Abgabe
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ ZULAESSIGE_NOTEN = frozenset(Decimal(n) for n in (
     "1.0", "1.3", "1.7", "2.0", "2.3", "2.7", "3.0", "3.3", "3.7", "4.0", "5.0"))
 BESTEHENSGRENZE = Decimal("4.0")
 MAX_VERSUCHE = 3
+PHASEN_JE_PORTFOLIO = 3
 
 # Status, die man von Hand setzen darf. Bestanden und nicht bestanden
 # ergeben sich ausschließlich aus einer eingetragenen Note.
@@ -313,11 +316,12 @@ class SchriftlicheArbeit(Pruefungsleistung):
 
 
 class Portfolio(Pruefungsleistung):
-    """Portfolio mit mehreren Phasen.
+    """Portfolio mit drei Phasen; die Abgabe der dritten ist die finale Abgabe.
 
     Der nächste Termin ist nicht gespeichert, sondern ergibt sich als Frist
     der ersten noch nicht abgegebenen Phase. Die Fristen dürfen fehlen
-    ([0..*]), solange man nicht eingeschrieben ist.
+    ([0..3]), solange man nicht eingeschrieben ist, und werden im Dialog
+    nacheinander für Phase 1, 2 und 3 eingetragen.
     """
 
     FORM = "Portfolio"
@@ -326,9 +330,17 @@ class Portfolio(Pruefungsleistung):
                  abgegebene_phasen: int = 0, **zustand) -> None:
         super().__init__(**zustand)
         fristen = sorted(phasenfristen)
+        if len(fristen) > PHASEN_JE_PORTFOLIO:
+            raise ValueError(f"Ein Portfolio hat {PHASEN_JE_PORTFOLIO} Phasen, "
+                             f"nicht {len(fristen)}")
         if not 0 <= abgegebene_phasen <= len(fristen):
             raise ValueError(f"{abgegebene_phasen} abgegebene Phasen passen nicht "
                              f"zu {len(fristen)} Fristen")
+        # Offen heißt: Mindestens eine Phase fehlt noch. Abgegeben, bestanden
+        # und nicht bestanden setzen alle drei Phasen voraus.
+        if self.ist_offen() != (abgegebene_phasen < PHASEN_JE_PORTFOLIO):
+            raise ValueError(f"Status {self.status.anzeige} passt nicht zu "
+                             f"{abgegebene_phasen} abgegebenen Phasen")
         self._phasenfristen = fristen
         self._abgegebene_phasen = abgegebene_phasen
 
@@ -341,7 +353,7 @@ class Portfolio(Pruefungsleistung):
         return self._abgegebene_phasen
 
     def phase_abgeben(self) -> None:
-        """Gibt die nächste Phase ab; nach der letzten Phase ist das Portfolio abgegeben.
+        """Gibt die nächste Phase ab; nach der dritten ist das Portfolio abgegeben.
 
         Abgeben lässt sich nur eine Phase, deren Frist eingetragen ist. Sonst
         stünden mehr abgegebene Phasen als Fristen im Portfolio, und eine
@@ -354,8 +366,28 @@ class Portfolio(Pruefungsleistung):
         if naechste > len(self._phasenfristen):
             raise ValueError(f"Erst die Frist der Phase {naechste} eintragen")
         self._abgegebene_phasen = naechste
-        if naechste == len(self._phasenfristen):
+        if naechste == PHASEN_JE_PORTFOLIO:
             self._status = Pruefungsstatus.ABGEGEBEN
+
+    def status_setzen(self, status: Pruefungsstatus) -> None:
+        """Status "abgegeben" heißt beim Portfolio: die letzte Phase ist abgegeben.
+
+        Von Hand gesetzt gibt er deshalb die dritte Phase ab und ist erst
+        möglich, wenn die ersten beiden abgegeben sind. Wird er zurück auf
+        geplant oder angemeldet gesetzt, ist die dritte Phase wieder offen.
+        """
+        offen = (Pruefungsstatus.GEPLANT, Pruefungsstatus.ANGEMELDET)
+        if status is Pruefungsstatus.ABGEGEBEN and self._status in offen:
+            letzte = PHASEN_JE_PORTFOLIO
+            if self._abgegebene_phasen < letzte - 1:
+                raise ValueError(f"Abgegeben ist ein Portfolio mit Phase {letzte}; offen ist "
+                                 f"noch Phase {self._abgegebene_phasen + 1}")
+            self.phase_abgeben()             # prüft Anmeldung und Frist der Phase 3
+            return
+        wieder_offen = self._status is Pruefungsstatus.ABGEGEBEN and status in offen
+        super().status_setzen(status)
+        if wieder_offen:
+            self._abgegebene_phasen = PHASEN_JE_PORTFOLIO - 1
 
     def naechster_termin(self) -> date | None:
         return self._termin_oder_ziel(self._gebuchter_termin())
@@ -366,31 +398,36 @@ class Portfolio(Pruefungsleistung):
         return offen[0] if offen else None
 
     def naechste_aufgabe(self) -> str:
-        return f"Phase {self._abgegebene_phasen + 1} abgeben"
+        return f"Phase {min(self._abgegebene_phasen + 1, PHASEN_JE_PORTFOLIO)} abgeben"
 
     def note_eintragen(self, note: Decimal, datum: date) -> None:
-        """Eine Note gibt es erst, wenn alle Phasen abgegeben sind.
-
-        Ohne Phasenfristen ist die Zahl der Phasen unbekannt; dann lehnt die
-        Methode ab, statt ein Portfolio mit 0 abgegebenen Phasen zu benoten.
-        """
-        if not self._phasenfristen:
-            raise ValueError("Erst die Phasenfristen eintragen und alle Phasen abgeben")
-        if self._abgegebene_phasen < len(self._phasenfristen):
+        """Eine Note gibt es erst, wenn alle drei Phasen abgegeben sind."""
+        if self._abgegebene_phasen < PHASEN_JE_PORTFOLIO:
             raise ValueError(f"Erst {self._abgegebene_phasen} von "
-                             f"{len(self._phasenfristen)} Phasen sind abgegeben")
+                             f"{PHASEN_JE_PORTFOLIO} Phasen sind abgegeben")
         super().note_eintragen(note, datum)
 
+    def _naechste_frist_nr(self) -> int:
+        """Phase, deren Frist termin_setzen() setzt (1 bis 3).
+
+        Solange Fristen fehlen, ist es die erste Phase ohne Frist. Stehen alle
+        drei fest, ist es die nächste offene Phase; so lässt sich deren Frist
+        korrigieren, etwa nach einer Verlängerung.
+        """
+        if len(self._phasenfristen) < PHASEN_JE_PORTFOLIO:
+            return len(self._phasenfristen) + 1
+        return self._abgegebene_phasen + 1
+
     def _termin_eintragen(self, datum: date) -> None:
-        """Setzt die Frist der nächsten offenen Phase; fehlt sie, kommt sie hinzu.
+        """Setzt die Frist der Phase aus _naechste_frist_nr().
 
         Die Fristen bleiben aufsteigend: Die neue Frist darf nicht vor der
         vorigen Phase und nicht nach der folgenden liegen.
         """
-        nr = self._abgegebene_phasen
+        nr = self._naechste_frist_nr()
         neu = list(self._phasenfristen)
-        if nr < len(neu):
-            neu[nr] = datum
+        if nr <= len(neu):
+            neu[nr - 1] = datum
         else:
             neu.append(datum)
         if neu != sorted(neu):
@@ -406,11 +443,8 @@ class Portfolio(Pruefungsleistung):
     def terminart(self) -> str:
         if not self.ist_offen():                # alle Phasen abgegeben oder bewertet
             return "Phasenfrist"
-        return f"Frist Phase {self._abgegebene_phasen + 1}"
+        return f"Frist Phase {self._naechste_frist_nr()}"
 
     def phasenstand(self) -> str:
         """Kurzbeschreibung für die Oberfläche, z. B. "2 von 3 Phasen abgegeben"."""
-        if self._phasenfristen:
-            return (f"{self._abgegebene_phasen} von {len(self._phasenfristen)} "
-                    "Phasen abgegeben")
-        return f"{self._abgegebene_phasen} Phasen abgegeben, Fristen noch offen"
+        return f"{self._abgegebene_phasen} von {PHASEN_JE_PORTFOLIO} Phasen abgegeben"

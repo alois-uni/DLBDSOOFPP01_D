@@ -5,7 +5,7 @@
 * die Aggregation Modul-Semester als Spalte, die leer sein darf
 * alle Prüfungsformen in einer Tabelle, die Spalte art wählt beim Laden die
   Unterklasse; eine CHECK-Bedingung lässt nur bekannte Werte zu
-* Phasenfristen in eigener Tabelle (Multiplizität [0..*])
+* Phasenfristen in eigener Tabelle (Multiplizität [0..3])
 * Studienziele ebenso über eine Spalte art
 * Fremdschlüssel werden je Verbindung eingeschaltet (PRAGMA foreign_keys)
 * Laden über die Konstruktoren, die den gespeicherten Zustand prüfen;
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS pruefungsleistung (  -- eine Tabelle für alle Prüfu
     termin            TEXT,     -- Klausur: Prüfungstermin, sonst Abgabefrist
     abgegebene_phasen INTEGER   -- nur Portfolio
 );
-CREATE TABLE IF NOT EXISTS phasenfrist (        -- Multiplizität [0..*]
+CREATE TABLE IF NOT EXISTS phasenfrist (        -- Multiplizität [0..3]
     modul_id INTEGER NOT NULL REFERENCES pruefungsleistung(modul_id) ON DELETE CASCADE,
     nr       INTEGER NOT NULL,
     frist    TEXT    NOT NULL,

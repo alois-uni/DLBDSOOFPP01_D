@@ -38,7 +38,8 @@ oberflaeche Echte Fenster: Dashboard in mehreren Größen, überlappende Texte,
 
 Nach jedem gelungenen Schritt prüft der Test:
 * die Regeln, die immer gelten (Status passt zur Note, höchstens drei
-  Versuche, Fristen aufsteigend, nicht mehr abgegebene Phasen als Fristen ...)
+  Versuche, Fristen aufsteigend, nicht mehr abgegebene Phasen als Fristen,
+  höchstens drei Phasen je Portfolio ...)
 * die Wirkung des Schritts (die eingetragene Note steht danach am Modul, ein
   gesetzter Termin ist der nächste Termin ...)
 * Speichern und Laden über SQLite ergibt denselben Zustand und dieselbe Anzeige
@@ -73,8 +74,8 @@ PROGRAMMORDNER = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROGRAMMORDNER))          # Pakete auch beim direkten Aufruf finden
 
 from controller import DashboardController  # noqa: E402
-from domain import (MAX_VERSUCHE, ZULAESSIGE_NOTEN, Abschlussgrad,  # noqa: E402
-                    Notenziel, Portfolio, Pruefungsstatus, Studiengang)
+from domain import (MAX_VERSUCHE, PHASEN_JE_PORTFOLIO, ZULAESSIGE_NOTEN,  # noqa: E402
+                    Abschlussgrad, Notenziel, Portfolio, Pruefungsstatus, Studiengang)
 from domain.studiengang import _plus_monate  # noqa: E402
 from repository import (InMemoryStudiengangRepository,  # noqa: E402
                         SqliteStudiengangRepository)
@@ -91,8 +92,8 @@ GRENZE = Decimal("4.0")
 
 UMFANG = {           # tiefe, zufall_laeufe, zufall_laenge, dialog_schritte
     "schnell": (6, 150, 40, 150),
-    "standard": (8, 600, 80, 600),
-    "gruendlich": (10, 3000, 150, 2500),
+    "standard": (10, 600, 80, 600),
+    "gruendlich": (12, 3000, 150, 2500),
 }
 
 
@@ -338,8 +339,13 @@ def regeln_pruefen(sg: Studiengang, stichtag: date = STICHTAG) -> list[tuple[str
             if not 0 <= pl.abgegebene_phasen <= len(fristen):
                 fehler.append(("Portfolio", f"{k}: {pl.abgegebene_phasen} abgegebene Phasen "
                                             f"bei {len(fristen)} Fristen"))
-            if pl.note is not None and (not fristen or pl.abgegebene_phasen != len(fristen)):
+            if len(fristen) > PHASEN_JE_PORTFOLIO:
+                fehler.append(("Portfolio", f"{k}: {len(fristen)} Phasenfristen"))
+            if pl.note is not None and pl.abgegebene_phasen != PHASEN_JE_PORTFOLIO:
                 fehler.append(("Portfolio", f"{k}: Note bei {pl.phasenstand()}"))
+            if pl.ist_offen() != (pl.abgegebene_phasen < PHASEN_JE_PORTFOLIO):
+                fehler.append(("Portfolio", f"{k}: Status {pl.status.value} bei "
+                                            f"{pl.phasenstand()}"))
     return fehler
 
 
@@ -367,6 +373,9 @@ def wirkung_pruefen(sg: Studiengang, kuerzel: str, schritt: tuple, vorher: dict)
         neuer_versuch = vorher["status"] is Pruefungsstatus.NICHT_BESTANDEN
         if pl.versuchsnummer != vorher["versuch"] + (1 if neuer_versuch else 0):
             fehler.append(f"Versuch {vorher['versuch']} -> {pl.versuchsnummer}")
+        if (isinstance(pl, Portfolio) and werte[0] is Pruefungsstatus.ABGEGEBEN
+                and pl.abgegebene_phasen != PHASEN_JE_PORTFOLIO):
+            fehler.append(f"Portfolio abgegeben bei {pl.phasenstand()}")
         if neuer_versuch:
             alt = [t for t in (getattr(pl, "pruefungstermin", None),
                                getattr(pl, "abgabefrist", None), *getattr(pl, "phasenfristen", ()))
@@ -379,9 +388,12 @@ def wirkung_pruefen(sg: Studiengang, kuerzel: str, schritt: tuple, vorher: dict)
             fehler.append(f"abgegebene Phasen {vorher['phasen']} -> {pl.abgegebene_phasen}")
     elif art == "termin":
         tag = werte[0]
-        if pl.naechster_termin() != tag:
-            fehler.append(f"nächster Termin ist {pl.naechster_termin()} statt {tag}")
         treffer = re.match(r"Frist Phase (\d+)", vorher["terminart"])
+        # Beim Portfolio lassen sich auch die Fristen späterer Phasen eintragen;
+        # nächster Termin wird nur die Frist der nächsten offenen Phase.
+        naechste_phase = treffer is None or int(treffer.group(1)) == vorher["phasen"] + 1
+        if naechste_phase and pl.naechster_termin() != tag:
+            fehler.append(f"nächster Termin ist {pl.naechster_termin()} statt {tag}")
         if treffer:
             nr = int(treffer.group(1))
             fristen = pl.phasenfristen
@@ -594,7 +606,10 @@ def sackgassen_pruefen(sammlung: Sammlung, kuerzel: str, lage: str, knoten_von: 
             if vorgaenger not in gut:
                 gut.add(vorgaenger)
                 arbeit.append(vorgaenger)
-    rand = 6                      # so viele Schritte braucht der längste Weg zum Bestehen
+    # So viele Schritte braucht der längste Weg zum Bestehen: Semester zuordnen,
+    # Termin, anmelden, Note; beim Portfolio drei Fristen und drei Phasen.
+    pl = next(iter(knoten_von.values())).sg.modul(kuerzel).pruefungsleistung
+    rand = 3 + 2 * PHASEN_JE_PORTFOLIO if isinstance(pl, Portfolio) else 6
     for k, kn in knoten_von.items():
         if k in gut or gesehen[k] > tiefe - rand:
             continue

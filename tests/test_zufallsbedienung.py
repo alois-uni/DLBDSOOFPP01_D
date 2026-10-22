@@ -32,8 +32,8 @@ from decimal import Decimal
 from pathlib import Path
 
 from controller import DashboardController
-from domain import (MAX_VERSUCHE, ZULAESSIGE_NOTEN, Portfolio, Pruefungsstatus,
-                    Studiengang)
+from domain import (MAX_VERSUCHE, PHASEN_JE_PORTFOLIO, ZULAESSIGE_NOTEN, Portfolio,
+                    Pruefungsstatus, Studiengang)
 from repository import InMemoryStudiengangRepository, SqliteStudiengangRepository
 from service import ErfassungsService, KennzahlenService
 from tests.test_repository import abbild
@@ -107,6 +107,10 @@ def invarianten_pruefen(sg: Studiengang, controller: DashboardController) -> Non
         if isinstance(pl, Portfolio):
             assert list(pl.phasenfristen) == sorted(pl.phasenfristen), modul.kuerzel
             assert pl.abgegebene_phasen <= len(pl.phasenfristen), modul.kuerzel
+            assert len(pl.phasenfristen) <= PHASEN_JE_PORTFOLIO, f"{modul.kuerzel}: Phasen"
+            # offen genau dann, wenn noch eine Phase fehlt (keine "Phase 4")
+            assert pl.ist_offen() == (pl.abgegebene_phasen < PHASEN_JE_PORTFOLIO), \
+                f"{modul.kuerzel}: {pl.status.value} bei {pl.phasenstand()}"
 
     # Plausibilitätsregeln aus Phase 3 (Gesamtzustand über mehrere Eingaben)
     for modul in sg.module:
@@ -119,7 +123,7 @@ def invarianten_pruefen(sg: Studiengang, controller: DashboardController) -> Non
             assert termin is None or termin >= sg.startdatum, f"{modul.kuerzel}: Termin"
         if isinstance(pl, Portfolio) and pl.note is not None:
             assert pl.phasenfristen, f"{modul.kuerzel}: Note ohne Phasenfristen"
-            assert pl.abgegebene_phasen == len(pl.phasenfristen), f"{modul.kuerzel}: Phasen"
+            assert pl.abgegebene_phasen == PHASEN_JE_PORTFOLIO, f"{modul.kuerzel}: Phasen"
 
     bestanden = sum(m.ects for m in sg.module if m.ist_bestanden())
     assert sg.bestandene_ects() == bestanden

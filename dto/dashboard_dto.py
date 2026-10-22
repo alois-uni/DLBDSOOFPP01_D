@@ -65,6 +65,6 @@ class DashboardDTO:
     hinweis: str
     ects_gesamt: int
     ects_soll_je_semester: int
-    zielnote: Decimal
+    zielnote: Decimal | None                         # None ohne Notenziel
     zusatz: str = ""                                 # ausstehende Bewertungen (G)
     aktuelles_semester: int | None = None

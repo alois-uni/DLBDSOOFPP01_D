@@ -84,6 +84,10 @@ class KennzahlenService:
 
         1. überschrittene Frist  2. ein Ziel im roten Bereich
         3. ein Termin innerhalb von 30 Tagen  4. ein Ziel im gelben Bereich
+
+        Steht für eine nur geplante Prüfung schon ein gebuchter Termin bzw.
+        eine Frist fest, nennt Regel 3 zuerst die Anmeldung: Ein Portfolio
+        nimmt eine Phase erst an, wenn es angemeldet ist.
         """
         termine = sorted(
             ((m.pruefungsleistung.naechster_termin(), m) for m in sg.module
@@ -111,7 +115,10 @@ class KennzahlenService:
             if pl.ist_selbst_geplant():
                 return (f"«{modul.bezeichnung}»: {pl.naechste_aufgabe()}, selbst geplant "
                         f"zum {datum_text(termin)} ({tage}), Termin noch nicht gebucht.")
-            return (f"«{modul.bezeichnung}»: {pl.naechste_aufgabe()} bis "
+            aufgabe = pl.naechste_aufgabe()
+            if pl.status is Pruefungsstatus.GEPLANT:
+                aufgabe = f"anmelden und {aufgabe}"
+            return (f"«{modul.bezeichnung}»: {aufgabe} bis "
                     f"{datum_text(termin)} ({tage}).")
 
         for ziel, ampel in ampeln:

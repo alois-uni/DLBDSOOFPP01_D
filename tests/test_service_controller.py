@@ -49,6 +49,14 @@ class KennzahlenTest(unittest.TestCase):
         self.assertEqual(hinweis, "«Mathematik Grundlagen I»: Klausur schreiben bis "
                                   "05.02.2027 (noch 16 Tage).")
 
+    def test_regel_gebuchter_termin_ohne_anmeldung(self):
+        mathe = self.sg.modul("MATHE").pruefungsleistung
+        mathe.status_setzen(Pruefungsstatus.GEPLANT)
+        mathe.termin_setzen(date(2027, 2, 5))
+        hinweis = self.service.handlungshinweis(self.sg, STICHTAG_SKIZZE)
+        self.assertEqual(hinweis, "«Mathematik Grundlagen I»: anmelden und Klausur "
+                                  "schreiben bis 05.02.2027 (noch 16 Tage).")
+
     def test_regel_ueberschrittene_frist_hat_vorrang(self):
         hinweis = self.service.handlungshinweis(self.sg, date(2027, 2, 6))
         self.assertTrue(hinweis.startswith("Frist überschritten: «Mathematik Grundlagen I»"))
